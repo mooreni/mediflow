@@ -8,7 +8,7 @@
 ## 2. POC Objective
 The goal of this phase is to build the complete pipeline for the **translation engine** (MVP):. This covers the entire flow, from evaluating and selecting the translation engine to orchestrating the agents, ensuring transparency, and integrating text extraction (OCR).
 
-## 3. Core Architecture and Components
+## 3. Core Architecture and Components 
 
 ### A. Evaluation Mechanism (Milestone 1) :
 * **Goal:** Develop an evaluation metric pipeline to measure translation quality against a "Gold Standard" official translation.
