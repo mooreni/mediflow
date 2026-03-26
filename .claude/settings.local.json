@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \":*)",
+      "Bash(python3 scripts/test_evaluator.py)",
+      "Bash(python:*)"
+    ]
+  }
+}

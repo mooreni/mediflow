@@ -13,9 +13,7 @@ This project is currently in the **planning phase**. The requirements specificat
 The system is a pipeline with four major components:
 
 ### 1. Evaluation Mechanism (Milestone 1)
-- **Comet evaluator**: HuggingFace Comet model for semantic similarity scoring against a gold-standard translation
-- **LLM-as-a-Judge**: Gemini Pro with a medical-specific rubric (1–10 scale, emphasis on medical terms, dosages, diagnoses)
-- **Hybrid approach**: Both evaluators run in parallel; correlation is analyzed to pick the DSPy optimization metric
+- **LLM-as-a-Judge**: Gemini Pro 3.1 with a medical-specific rubric (0–100 scale, emphasis on medical terms, dosages, diagnoses); this is the sole evaluator and the DSPy optimization metric
 
 ### 2. Agent Orchestration & Classification (Milestone 3)
 - **Router Agent**: Lightweight Gemini Flash agent that classifies input documents into one of 5 types: `Summary`, `Prescript`, `Referral`, `Form`, `Record`
@@ -34,6 +32,10 @@ The system is a pipeline with four major components:
 ## Tech Stack
 - **LLM Framework**: DSPy
 - **Models**: Google Gemini Pro (evaluation/translation), Gemini Flash (routing)
-- **Evaluation**: HuggingFace Comet
-- **OCR**: Google Cloud Vision API
-- **Languages**: Medical documents are primarily Hebrew; output is multilingual
+- **Evaluation**: Google Gemini Pro
+- **OCR**: TBD
+- **Languages**: Medical documents are primarily Hebrew; output is mainly russian.
+
+## Rules
+- IMPORTANT: Before asking to perform an action (like reading a file or changing code), explain briefly what is it needed for.
+See [RULES.md](./RULES.md) for all coding standards, design principles, error handling, testing, security, and self-review rules.
