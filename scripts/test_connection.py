@@ -14,12 +14,10 @@ if "GOOGLE_CLOUD_PROJECT" not in os.environ:
     print("Set it in your shell or in a .env file, then retry.")
     sys.exit(1)
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 from src.evaluation.vertex_client import MODEL, get_client
 
 print(f"Project : {os.environ['GOOGLE_CLOUD_PROJECT']}")
-print(f"Location: {os.environ.get('GOOGLE_CLOUD_LOCATION', 'us-central1')}")
+print(f"Location: {os.environ.get('GOOGLE_CLOUD_LOCATION', 'global')}")
 print(f"Model   : {MODEL}")
 print("Initializing client...")
 

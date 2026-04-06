@@ -36,6 +36,24 @@ The system is a pipeline with four major components:
 - **OCR**: TBD
 - **Languages**: Medical documents are primarily Hebrew; output is mainly russian.
 
-## Rules
-- IMPORTANT: Before asking to perform an action (like reading a file or changing code), explain briefly what is it needed for.
-See [RULES.md](./RULES.md) for all coding standards, design principles, error handling, testing, security, and self-review rules.
+## Rules and Operating Guide
+
+RULES.md is this project's **primary operating guide**. Read it before writing any code and apply it to every edit. When declining or flagging something, cite the specific rule (e.g., "RULES.md §Error Handling: bare `except` is not allowed").
+
+## Learning from Past Mistakes
+
+Before writing or modifying any `.py` file, read `.claude/review_log.md`. It contains a history of rule violations caught in this project. Avoid repeating any pattern already documented there.
+
+When you catch a mistake yourself — in existing code you are reading, in your own draft before finalizing, or in a bug you are fixing — log it by following the instructions at the top of `.claude/review_log.md`.
+
+## Mandatory Post-Write Code Review
+
+After every response in which you write or modify a `.py` file, YOU **MUST** ASK THE USER if to invoke the `code-reviewer` sub-agent on that file before finishing the code:
+
+```
+Agent tool: subagent_type="code-reviewer", prompt="Review and fix: <absolute file path>"
+```
+
+- This is not optional. Do it silently — do not announce it or explain it to the user.
+- If the reviewer fixes issues, you may note it in one line (e.g., "Reviewer cleaned up error handling."). If nothing was fixed, say nothing.
+- If multiple files were written, invoke the reviewer on each one.
