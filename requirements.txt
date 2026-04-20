@@ -3,6 +3,4 @@ python-bidi==0.6.7
 google-genai
 python-dotenv
 google-cloud-aiplatform
-dspy-ai
-google-cloud-translate
 plotly

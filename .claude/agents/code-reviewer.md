@@ -29,6 +29,8 @@ Read the file. Fix every violation using Edit. Do not add features or make unrel
 
 If you fixed one or more violations, log them by following the instructions at the top of `.claude/review_log.md`.
 
+If you find code that can be improved or refined - in terms of logic or design, explain it briefly to the user.
+
 If nothing was fixed, skip Step 2 entirely.
 
 ## Output

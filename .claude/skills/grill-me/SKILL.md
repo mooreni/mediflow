@@ -10,3 +10,4 @@ Ask the questions one at a time.
 If a question can be answered by exploring the codebase, explore the codebase instead.
 
 When the user says 'Done', create a detailed ready-to-be-implemented plan as a PLAN.md file. Write the plan as steps, each step is followed by another until completion of the plan. Make each step at a reasonable size for one coding agent to deal with.
+Include a final "Update README.md" step if the plan's implementation requires updating it.

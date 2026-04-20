@@ -8,4 +8,10 @@ version = "0.1.0"
 requires-python = ">=3.11"
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
+# CLI entry point: python scripts/run.py
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: tests that call real LLM APIs (run with --run-integration)",
+]

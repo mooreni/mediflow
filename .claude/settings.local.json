@@ -38,7 +38,24 @@
       "Bash(venv/bin/python3:*)",
       "Bash(xargs -I {} sh -c 'echo \"File: {}\" && wc -c {}')",
       "Bash(python3:*)",
-      "Bash(grep -r \"JSONAdapter\\\\|context\\\\|truncat\" /mnt/c/Dev/mediflow/src/benchmark/scenarios/*.py)"
+      "Bash(grep -r \"JSONAdapter\\\\|context\\\\|truncat\" /mnt/c/Dev/mediflow/src/benchmark/scenarios/*.py)",
+      "Bash(grep -E \"\\\\.py$\")",
+      "Bash(ls:*)",
+      "Bash(timeout 60 GOOGLE_CLOUD_PROJECT=test-project venv/bin/python3:*)",
+      "Bash(export GOOGLE_CLOUD_PROJECT=test-project)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(less)",
+      "Bash(ps -o pid,etime,cmd -p 11753)",
+      "Bash(ps:*)",
+      "Bash(sudo -n ls /proc/11753/fd)",
+      "Bash(grep -l \"class.*Scenario\" /mnt/c/Dev/mediflow/src/benchmark/scenarios/*.py)",
+      "Bash(wc -l /mnt/c/Dev/mediflow/src/benchmark/scenarios/s*.py /mnt/c/Dev/mediflow/src/evaluation/*.py /mnt/c/Dev/mediflow/src/benchmark/*.py /mnt/c/Dev/mediflow/src/pipeline/*.py)",
+      "Bash(PYTHONPATH=src venv/bin/python3 *)",
+      "Bash(git ls-tree *)",
+      "Bash(mv /mnt/c/Dev/mediflow/benchmark.db /mnt/c/Dev/mediflow/data/benchmark.db)",
+      "Bash(rm /mnt/c/Dev/mediflow/benchmark_legacy.db)",
+      "Bash(sqlite3 data/translations.db \"SELECT id, doc_id, cost_usd, elapsed_sec, input_tokens, output_tokens, length\\(translation\\) AS trans_len FROM results;\")",
+      "Bash(sqlite3 data/translations.db \"SELECT result_id, section_index, section_label, elapsed_sec, length\\(section_hebrew\\) AS heb_len, length\\(section_russian\\) AS rus_len FROM section_results ORDER BY result_id, section_index;\")"
     ]
   }
 }

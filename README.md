@@ -1,33 +1,66 @@
 # MediFlow
 
-**MediFlow** is a medical document translation engine POC designed to help immigrants in Israel understand medical documents in their native language. It is a multi-agent AI system built with [DSPy](https://github.com/stanfordnlp/dspy) and Google Gemini models that translates Hebrew medical documents into Russian with high accuracy on critical medical terminology.
-
-The project is structured around a systematic **benchmarking pipeline** that compares six translation strategies — from a simple baseline to a DSPy-bootstrapped few-shot architecture — and evaluates each one using an LLM-as-a-judge scoring system.
+MediFlow is a medical document translation engine designed to help immigrants in Israel understand medical documents in their native language. It translates Hebrew medical documents (forms, prescriptions, referrals, summaries) into Russian using a multi-step Gemini pipeline: each document is split into labelled clinical sections, every section is translated by Gemini Flash, scored by a Gemini Pro MQM judge, and corrected by Gemini Pro if the quality falls below threshold.
 
 ---
 
-## Features
+## Pipeline Modes
 
-- **6 Translation Scenarios** — from a Google Translate baseline to a DSPy-bootstrapped few-shot pipeline
-- **LLM-as-a-Judge Evaluation** — Gemini Pro scores each translation on critical terms, completeness, and semantic accuracy
-- **Persistent Results** — all runs stored in a local SQLite database with full cost and latency tracking
-- **Interactive HTML Report** — Plotly-based visualisation of benchmark results across all scenarios
-- **Concurrent Processing** — documents evaluated in parallel with a configurable thread pool
+MediFlow has two operating modes:
+
+| Mode | Script | Database | Final MQM Eval |
+|---|---|---|---|
+| **Production** | `scripts/run.py` | `data/translations.db` | No |
+| **Test** | `scripts/run_test.py` | `data/benchmark.db` | Yes |
+
+**Production mode** translates documents and persists results. It does not run a final MQM evaluation pass — the midway judge inside each section task is the quality gate.
+
+**Test mode** translates documents and runs a final MQM evaluation on every section. If a section was corrected by Pro, a fresh judge call scores the corrected output. If not corrected, the midway score is reused — no extra API call. Results are stored with quality scores and error breakdowns for benchmarking.
 
 ---
 
-## Tech Stack
+## How the Pipeline Works
 
-| Layer | Technology |
-|---|---|
-| Language | Python 3.11+ |
-| LLM Framework | [DSPy](https://github.com/stanfordnlp/dspy) |
-| LLM Models | Google Gemini Pro, Gemini Flash (via Vertex AI) |
-| Translation Baseline | Google Cloud Translation API v2 |
-| Evaluation | Google Vertex AI (Gemini Pro LLM-as-judge) |
-| Database | SQLite (via `sqlite3` stdlib) |
-| Visualisation | Plotly |
-| Dependency Management | `pyproject.toml` / setuptools |
+```
+Document (Hebrew)
+    │
+    ▼
+[Splitter]  Gemini Flash segments the document into labelled clinical sections.
+            Each section receives a context header (document type + patient context).
+            Split results are cached in data/split_cache.json (test mode only).
+    │
+    ▼
+[Per-section — single ThreadPoolExecutor, 8 workers, doc-first queue order]
+    │
+    ├─ Step 1: Flash Translate — Gemini Flash produces an initial Hebrew → Russian draft
+    ├─ Step 2: Judge Eval     — Gemini Pro scores the draft using MQM error taxonomy
+    └─ Step 3: Pro Correct    — if the midway score is below threshold, Gemini Pro
+                                 rewrites the section using the judge's error feedback;
+                                 otherwise the Flash draft is kept as-is
+    │
+    ▼
+[Test mode only]
+    └─ Final Eval — if section was corrected: fresh judge call on the corrected output
+                    if not corrected: midway score and errors are reused directly
+    │
+    ▼
+[Persistence]  Section and document results written to SQLite
+               Production → data/translations.db
+               Test       → data/benchmark.db
+[Report]       benchmark_results.html generated via Plotly (test mode)
+```
+
+## MQM Scoring Model
+
+Translations are scored using a penalty-based MQM (Multidimensional Quality Metrics) model.
+
+- **5 error categories:** `accuracy`, `terminology`, `audience_appropriateness`, `linguistic_conventions`, `locale_conventions`
+- **3 severity levels and their penalties:**
+  - `critical` — 0.25
+  - `major` — 0.05
+  - `minor` — 0.01
+- **Score formula:** `score = max(0, 1 − sum_of_penalties)`
+- A section with no errors scores 1.0. The document-level score is computed by aggregating all section-level errors and applying the penalty formula once across the full error set.
 
 ---
 
@@ -36,118 +69,121 @@ The project is structured around a systematic **benchmarking pipeline** that com
 ```
 mediflow/
 ├── data/
+│   ├── translations.db           # Production SQLite database
+│   ├── benchmark.db              # Test/benchmark SQLite database
+│   ├── split_cache.json          # Cached section splits (test mode; auto-built on first run)
 │   └── informed_consent_forms/
-│       ├── pdfs/
-│       │   ├── he/          # Hebrew source PDFs
-│       │   └── ru/          # Russian reference PDFs
 │       └── text/
-│           ├── he/          # Extracted Hebrew plain-text
-│           └── ru/          # Extracted Russian reference translations
+│           ├── he/               # Hebrew source documents
+│           └── ru/               # Russian reference translations
 ├── scripts/
-│   ├── run_benchmark.py     # Main CLI entry point
-│   └── test_*.py            # Scenario and integration test scripts
-├── src/
-│   ├── app/                 # PDF extraction utilities
-│   ├── benchmark/
-│   │   ├── cost.py          # Per-scenario cost calculation
-│   │   ├── dataset.py       # Dataset loading and train/eval split
-│   │   ├── db.py            # SQLite persistence layer
-│   │   ├── runner.py        # Concurrent scenario runner
-│   │   ├── visualize.py     # Plotly report generation
-│   │   └── scenarios/
-│   │       ├── base.py
-│   │       ├── s1_google_translate.py
-│   │       ├── s2_gemini_flash_zeroshot.py
-│   │       ├── s3_gemini_pro_dspy_predict.py
-│   │       ├── s4_gemini_pro_bootstrap.py
-│   │       ├── s5_gemini_flash_dspy_predict.py
-│   │       └── s6_gemini_flash_cot.py
-│   └── evaluation/
-│       ├── llm_judge.py     # LLM-as-judge scoring logic
-│       └── vertex_client.py # Vertex AI client wrapper
+│   ├── run.py                    # Production pipeline entry point
+│   ├── run_test.py               # Test/benchmark pipeline entry point
+│   ├── build_split_cache.py      # Pre-build the split cache
+│   └── extract_medical_pdfs.py   # One-time PDF → text extraction utility
+├── src/app/
+│   ├── clients/
+│   │   └── vertex.py             # Thread-local Vertex AI client factory
+│   ├── data/
+│   │   └── loader.py             # load_documents() with optional type/id filters
+│   ├── evaluation/
+│   │   └── judge.py              # MQM judge: score_section(), score_document()
+│   ├── translation/
+│   │   ├── base.py               # SectionTranslationResult, TranslationResult dataclasses
+│   │   ├── cost.py               # CostRecord, gemini_cost(), sum_costs()
+│   │   ├── splitter.py           # split_document() via Gemini Flash
+│   │   └── translator.py         # MedicalTranslator — the per-section pipeline
+│   ├── db.py                     # BenchmarkDB — test SQLite persistence layer
+│   ├── production_db.py          # ProductionDB — production SQLite persistence layer
+│   └── visualize.py              # generate_report() — Plotly HTML report
+├── tests/
+├── benchmark_results.html        # Generated visualisation report
 ├── env.example
 └── pyproject.toml
 ```
 
 ---
 
-## Benchmark Scenarios
-
-| ID | Scenario | Description |
-|---|---|---|
-| S1 | Google Translate | Cloud Translation API v2 — cost/quality baseline |
-| S2 | Gemini Flash Zero-shot | Direct Gemini Flash call, no DSPy, no optimisation |
-| S3 | Gemini Pro DSPy Predict | DSPy `Predict` module with structured signature (Gemini Pro) |
-| S4 | Gemini Pro Bootstrap | DSPy `BootstrapFewShot` optimiser with few-shot examples (Gemini Pro) |
-| S5 | Gemini Flash DSPy Predict | DSPy `Predict` module with structured signature (Gemini Flash) |
-| S6 | Gemini Flash ChainOfThought | DSPy `ChainOfThought` module, zero-shot (Gemini Flash) |
-
-Each scenario is evaluated across **40 documents** (10 per document type × 4 types). Scores are computed by a Gemini Pro judge on four dimensions: **critical terms**, **completeness**, **semantic accuracy**, and **overall quality** (0–100 scale).
-
----
-
 ## Installation
 
-**Prerequisites:** Python 3.11+, a Google Cloud project with Vertex AI and Cloud Translation APIs enabled, and authenticated Application Default Credentials (`gcloud auth application-default login`).
+**Prerequisites:** Python 3.11+, a Google Cloud project with Vertex AI enabled, and Application Default Credentials configured:
 
-**1. Clone the repository**
+```bash
+gcloud auth application-default login
+```
+
+**1. Clone and set up the environment**
 
 ```bash
 git clone <repository-url>
 cd mediflow
-```
-
-**2. Create and activate a virtual environment**
-
-```bash
 python -m venv venv
-
-# Windows
-venv\Scripts\activate
-
-# macOS / Linux
-source venv/bin/activate
-```
-
-**3. Install the package and dependencies**
-
-```bash
+source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -e .
-pip install dspy-ai google-cloud-translate google-cloud-aiplatform plotly python-dotenv
 ```
 
-**4. Configure environment variables**
-
-Copy `env.example` to `.env` and fill in your Google Cloud project details:
+**2. Configure environment variables**
 
 ```bash
 cp env.example .env
+# Edit .env and set GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION
 ```
+
+**Dependencies:**
+
+| Package | Purpose |
+|---|---|
+| `google-genai` | Vertex AI LLM calls |
+| `google-cloud-aiplatform` | Vertex AI platform client |
+| `plotly` | HTML report generation |
+| `python-dotenv` | `.env` file loading |
+| `pdfplumber` | PDF extraction (one-time preprocessing only) |
+| `python-bidi` | Hebrew text rendering (preprocessing only) |
 
 ---
 
-## Usage
+## CLI Usage
 
-All commands are run from the project root with the virtual environment active.
-
-**Run the full benchmark (all 5 scenarios)**
+All commands are run from the project root.
 
 ```bash
-python scripts/run_benchmark.py
+# Production mode — translate all documents, persist to data/translations.db
+venv/bin/python3 scripts/run.py
+
+# Production mode — translate only one document type
+venv/bin/python3 scripts/run.py --doc-type form        # form | summary | prescript | referral
+
+# Production mode — translate a single document by ID
+venv/bin/python3 scripts/run.py --doc-id Form_001
+
+# Test/benchmark mode — translate + final MQM eval, persist to data/benchmark.db
+venv/bin/python3 scripts/run_test.py
+
+# Generate the HTML report from existing benchmark DB results (skips translation)
+venv/bin/python3 scripts/run_test.py --visualize
 ```
 
-**Run a single scenario**
+The split cache (`data/split_cache.json`) is used by test mode and built automatically on first run. To pre-build it explicitly:
 
 ```bash
-python scripts/run_benchmark.py --scenario s1_google_translate
-# Available: s1_google_translate | s2_gemini_flash_zeroshot | s3_gemini_pro_dspy_predict
-#            s4_gemini_pro_bootstrap | s5_gemini_flash_dspy_predict | s6_gemini_flash_cot
+venv/bin/python3 scripts/build_split_cache.py
 ```
 
-**Generate the HTML visualisation report from existing results**
+Documents already present in the database are skipped on subsequent runs.
 
-```bash
-python scripts/run_benchmark.py --visualize
-```
+---
 
-Results are persisted to `benchmark.db` (SQLite) in the project root. Scenarios already present in the database are automatically skipped on subsequent runs. The visualisation report is written to `benchmark_results.html`.
+## Tech Stack
+
+| Component | Technology |
+|---|---|
+| Language | Python 3.11+ |
+| Translation (draft) | Gemini Flash (`gemini-3-flash-preview`) via Vertex AI |
+| Translation (correction) | Gemini Pro (`gemini-3.1-pro-preview`) via Vertex AI |
+| Evaluation / Judge | Gemini Pro (`gemini-3.1-pro-preview`) via Vertex AI |
+| Document splitting | Gemini Flash via Vertex AI |
+| LLM client | `google-genai` |
+| Persistence | SQLite via `sqlite3` stdlib |
+| Concurrency | `ThreadPoolExecutor` (8 workers, single shared pool) |
+| Reporting | Plotly (HTML) |
+| Languages | Hebrew → Russian |
